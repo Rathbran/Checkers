@@ -1,8 +1,48 @@
-var k = 30;
+const fs = require("fs");
+
+function OpenFile(){
+  file = "./BoardState.txt"
+  fs.readFile(file, 'utf-8',function (error, data){
+    if (error) throw error;
+    let items = data.splice(" ");
+    for (x = 0; x < 10; x++){
+      let items[x] = items[x].splice(",");
+      for (y = 0; y < 10; y++){
+        Board[x][y] = items[x][y];
+      }
+    }
+  });
+}
 
 function SaveFile(){
-  saveJSON(Board, 'BoardState.json'); 
+  file = "./BoardState.txt"
+  fs.unlinkSync(file);
+  fs.open(file, 'w+', function(err, fd) {
+    if (err) {
+      return console.error(err);
+    }
+    let msg = "";
+    for (x = 0; x < 10; x++){
+      for (y = 0; y < 10; y++){
+        msg = Board[x][y] + ",";
+      }
+      msg = msg + " "
+    }
+    console.log(msg);
+    fs.write(fd, msg , function(err) {
+      if (err) {
+        console.log(err);
+      }
+    });
+    fs.close(fd, function(err) {
+      if (err) {
+        console.log(err);
+      }
+    });
+  });
 }
+
+var k = 30;
 
 function selected() {
   this.x = 0;
@@ -68,6 +108,7 @@ function InitializeGame() {
       }
     }
   }
+  SaveFile();
 }
 
 function Center(i) {
@@ -112,6 +153,7 @@ function Jump(Turn, origin) {
       return jump;
     }
   }
+  Step = 1;
   return Turn;
 }
 
@@ -128,7 +170,6 @@ function Logic(Turn, origin) {
       Turn = Jump(Turn, origin);
     }
     if (Step == 1) {
-      SaveFile();
       Counter = Counter * -1
     }
   }
@@ -191,6 +232,7 @@ function keyPressed() {
 
 function draw() {
   if (playing == true) {
+    OpenFile();
     keyPressed()
     Move();
     for (x = 0; x < 10; x++) {
@@ -199,8 +241,8 @@ function draw() {
       }
     }
     drawpiece(Counter, 10, 0);
+    SaveFile();
   }
-
   fill('green');
   circle(mouseX, mouseY, k / 3);
 }
