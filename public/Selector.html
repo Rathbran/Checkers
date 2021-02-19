@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <script>
+      function Select(Game){
+        Game = './Games/' + Game + ".html";
+        parent.document.getElementById('game').src = Game;
+      }
+    </script>
+  </head>
+  <body>
+    <h1>Games</h1>
+    <button onclick = "Select('Checkers')">Checkers</button>
+    <br>
+    <button onclick = "Select('Snake')">Snake</button>
+
+
+  </body>
+</html>
