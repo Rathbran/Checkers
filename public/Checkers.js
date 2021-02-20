@@ -53,8 +53,8 @@ function setup() {
   Play = createButton('-Play-');
   Play.position(k * 4.75, k * 4.5);
   Play.mouseClicked(StartGame);
-  var Server = 'https://1d6e15c5c1de.ngrok.io';
-  //var Server = 'http://localhost:3000';
+  //var Server = 'https://1d6e15c5c1de.ngrok.io';
+  var Server = 'http://localhost:3000';
 
   socket = io.connect(Server);
 
@@ -92,7 +92,7 @@ function StartGame() {
   playing = true;
 }
 
-function board(selected) {
+function board() {
   for (y = 0; y < 10; y++) {
     for (x = 0; x < 10; x++) {
       if ((x + y) % 2 == 0) {
@@ -100,15 +100,10 @@ function board(selected) {
       } else {
         fill('black');
       }
-      if (x == Turn.x && y == Turn.y) {
-        stroke(selected);
-      } else {
-        stroke('rgba(10,10,100, 0.5)');
-      }
+
       square(x * k, y * k, k);
     }
   }
-  stroke('white');
 }
 
 function InitializeGame() {
@@ -296,7 +291,10 @@ function mouseMoved(){
 
 function draw() {
   if (playing == true){
-    board(Piece);
+    board();
+    noFill();
+    stroke(Piece);
+    square(Turn.x * k,Turn.y * k, k)
     Lay();
   }
 }
