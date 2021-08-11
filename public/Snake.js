@@ -3,7 +3,8 @@ var geosize = 30;
 const boardSize = 13;
 var snakeSize;
 var boardState = [];
-var direction = "d";
+var direction = '';
+var LOL;
 var game = false;
 var headX;
 var headY;
@@ -36,24 +37,9 @@ function initializeGame(){
 function keyPressed() {
   if (key == 'p'){
     initializeGame();
-  }else if(key == 'w'){
-    if (direction != 's'){
-      direction = key;
-    }
   }
-  else if(key == 'a'){
-    if (direction != 'd'){
-      direction = key;
-    }
-  }else if(key == 's'){
-    if (direction != 'w'){
-      direction = key;
-    }
-  }else if(key == 'd'){
-    if (direction != 'a'){
-      direction = key;
-    }
-  }
+  direction = key;
+
 }
 
 function setup() {
@@ -70,7 +56,27 @@ function setup() {
 function draw() {
   if(game == true){
     Board();
-    gametick(direction);
+      if(LOL == 'w'){
+        if (direction != 's'){
+          LOL = direction;
+        }
+      }else if (LOL == 's'){
+        if (direction != 'w'){
+          LOL = direction;
+        }
+      }else if (LOL == 'a'){
+        if (direction != 'd'){
+          LOL = direction;
+        }
+      }else if (LOL == 'd'){
+        if (direction != 'a'){
+          LOL = direction;
+        }
+      }else{
+        LOL = direction
+      }
+
+    gametick(LOL);
   }
 }
 
@@ -87,6 +93,7 @@ function gametick(Direction){
       }
     }
   }
+
   switch(Direction) {
     case 'd':
       headX = headX + 1;

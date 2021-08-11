@@ -53,8 +53,9 @@ function setup() {
   Play = createButton('-Play-');
   Play.position(k * 4.75, k * 4.5);
   Play.mouseClicked(StartGame);
-  //var Server = 'https://1d6e15c5c1de.ngrok.io';
-  var Server = 'http://localhost:3000';
+
+  var Server = 'https://9fc5c06b916f.ngrok.io';
+  //var Server = 'http://localhost:3000';
 
   socket = io.connect(Server);
 
@@ -132,11 +133,12 @@ function Center(i) {
 }
 
 function drawpiece(Piece, x, y) {
+  stroke('white');
   if (Piece > 0) {
     fill('blue');
     circle(Center(x), Center(y), k / 2);
     if(Piece > 1) {
-      square(x, y, k / 4);
+      square(Center(x), Center(y), k / 4);
     }
   } else if (Piece < 0) {
     fill('black');

@@ -1,677 +1,768 @@
-var k = 30;
-var playing = true;
+//Declarations
 var socket = io();
-
-var selected = -1;
-var turn = 1;
-var leftC = -1;
-var rightC = -1;
 var sprites;
 
-var board = {
-  x : 8,
-  y : 8,
+var k = 30;
+var Player = '';
+var move = false;
+var turn = 'w';
+var playing = true;
 
-  selected : -1,
+//Board Object
+var Board = {
+    width: 8,
+    height: 8,
 
-  pieces : [],
-  spaces : [],
+    selected: {
+        x: 0,
+        y: 0,
+    },
+    move: {
+        x: 0,
+        y: 0,
+        Take: false,
+        Castling: false,
+    },
 
-  whiteking : 0,
-  blackking : 0,
+    Spaces: [],
+    BlackPieces: 0,
+    WhitePieces: 0,
+    BlackCheck: false,
+    WhiteCheck: false,
+    BlackCheckMate: false,
+    WhiteCheckMate: false,
 
-  populate : function(){
-    this.pieces.splice(0, this.pieces);
-    for(x = 0; x < this.x; x++){
-      for(y = 0; y < this.y; y++){
-        var team = '';
-        var piece = '';
-        if (y < 2){
-          team = 1;
-        }else if(y > 5){
-          team = -1;
-        }else{
-          team = 0;
-        }
-        if (y == 0 || y == 7){
-          if (x == 0 || x == 7){
-            piece = 'rook';
-          } else if((x == 1 || x == 6)){
-            piece = 'knight';
-          } else if((x == 2 || x == 5)){
-            piece = 'bishop';
-          } else if(x == 3){
-            piece = 'queen';
-          } else if(x == 4){
-            piece = 'king';
-          }
-        }else{
-          piece = 'pawn';
-        }
-        if (team != 0){
-          if (piece != ''){
-            this.pieces.push(new Piece(x,y,piece,team))
-            if (piece == 'king'){
-              if (team == 1){
-                this.whiteking = this.pieces.length - 1;
-              }else if (team == -1){
-                this.blackking = this.pieces.length - 1;
-              }
+    PopulatePieces: function () {
+        for (var i in this.Spaces) {
+            for (var j in this.Spaces[i]) {
+                this.Spaces[i][j].Possession.Black = false
+                this.Spaces[i][j].Possession.White = false
             }
-          }
         }
-      }
-    }
-  },
-  display : function(){
-    for(x = 0; x < this.x; x++){
-      for(y = 0; y < this.y; y++){
+        for (i in this.BlackPieces) {
+            this.Spaces[this.BlackPieces[i].x][this.BlackPieces[i].y].Piece.PopulateMoves();
+        }
+        for (i in this.WhitePieces) {
+            this.Spaces[this.WhitePieces[i].x][this.WhitePieces[i].y].Piece.PopulateMoves();
+        }
+    },
+
+    TakePiece: function () {
+        if (turn == 'w') {
+            var n = 0;
+            while (this.BlackPieces[n].x != this.move.x || this.BlackPieces[n].y != this.move.y && n < this.BlackPieces.length) {
+                n++;
+            }
+            //console.log(n);
+            this.BlackPieces.splice(n, 1);
+        } else if (turn == 'b') {
+            let n = 0;
+            while (this.WhitePieces[n].x != this.move.x || this.WhitePieces[n].y != this.move.y && n < this.WhitePieces.length) {
+                n++;
+            }
+            //console.log(n);
+            this.WhitePieces.splice(n, 1);
+        }
+    },
+
+    MovePiece: function (x1,y1,x2,y2) {
+        //switch selected piece into move slot and remove from selected slot
+        this.Spaces[x2][y2].Piece.team = this.Spaces[x1][y1].Piece.team;
+        this.Spaces[x2][y2].Piece.piece = this.Spaces[x1][y1].Piece.piece;
+        this.Spaces[x2][y2].Piece.firstMove = false;
+        this.Spaces[x1][y1].Piece.team = 'e';
+        this.Spaces[x1][y1].Piece.piece = 'e';
+        //update position in list of pieces
+    },
+
+    UpdateLists: function (x1,y1,x2,y2) {
+        if (turn == 'w') {
+            var piece = 0;
+            for (n in this.WhitePieces) {
+                if (this.WhitePieces[n].x == x1 && this.WhitePieces[n].y == y1) {
+                    piece = n;
+                }
+            }
+            this.WhitePieces[piece].x = x2;
+            this.WhitePieces[piece].y = y2;
+        } else if (turn == 'b') {
+            var piece = 0;
+            for (n in this.BlackPieces) {
+                if (this.BlackPieces[n].x == x1 && this.BlackPieces[n].y == y1) {
+                    piece = n;
+                }
+            }
+            this.BlackPieces[piece].x = x2;
+            this.BlackPieces[piece].y = y2;
+        }
+    },
+
+    TurnChange: function () {
+        //console.log(this.BlackCheck);
+        //console.log(this.WhiteCheck);
+
+        // will have to add complete exception for castling.
+        // if taking, remove took piece from list of pieces
+        if (this.move.Castling == true) {
+            var direction = (this.selected.x - this.move.x) / abs(this.selected.x - this.move.x);
+            //console.log(this.move.x + direction) //6
+            //console.log(this.move.x - direction) //8
+            this.MovePiece((this.move.x - direction), this.selected.y, (this.move.x + direction), this.move.y);
+            this.UpdateLists((this.move.x - direction), this.selected.y, (this.move.x + direction), this.move.y);
+        }
+        if (this.move.Take == true) {
+            this.TakePiece();
+        }
+        this.MovePiece(this.selected.x, this.selected.y,this.move.x, this.move.y);
+        this.UpdateLists(this.selected.x, this.selected.y, this.move.x, this.move.y);
+
+        if (move == true) {
+            this.SendData()
+        }
+
+        //change turn
+        this.selected.x = 0;
+        this.selected.y = 0;
+        this.move.x = 0;
+        this.move.y = 0;
+        this.move.Take = false;
+        this.move.Castling = false;
+        move = false;
+        //Populate Moves 
+        if (this.WhiteCheck == true) {
+            this.WhiteCheckMate = true;
+            this.WhiteCheck = false
+        }
+        if (this.BlackCheck == true) {
+            this.BlackCheckMate = true;
+            this.BlackCheck = false
+        }
+        this.PopulatePieces()
+        if (this.WhiteCheck != true) {
+            this.WhiteCheckMate = false;
+        }
+        if (this.BlackCheck != true) {
+            this.BlackCheckMate = false;
+        }
+
+        if (this.BlackCheckMate == true || this.WhiteCheckMate == true) {
+            playing = false;
+        }
+        if (turn == 'w') {
+            turn = 'b';
+        } else if (turn == 'b') {
+            turn = 'w';
+        }
+        
+    },
+
+    SendData: function () {
+        var data = {
+            selected: {
+                x: this.selected.x,
+                y: this.selected.y,
+            },
+            move: {
+                x: this.move.x,
+                y: this.move.y,
+                Take: this.move.Take,
+                Castling: this.move.Castling,
+            },
+        }
+        socket.emit('endTurnChess', data);
+    },
+
+    Initialize: function () {
+        this.BlackPieces = [];
+        this.WhitePieces = [];
+
+        // initialize Board spaces.
+        for (var x = 1; x <= this.width; x++) {
+            this.Spaces[x] = [];
+            for (var y = 1; y <= this.height; y++) {
+                this.Spaces[x][y] = new Space(x,y);
+            }
+        }
+
+        // initialize white back row
+        var team = 'w';
+        var y = 1;
+
+        for (var x = 1; x <= this.width; x++) {
+            this.Spaces[x][y].Piece.team = team;
+        }
+        this.Spaces[1][y].Piece.piece = 'r';
+        this.Spaces[2][y].Piece.piece = 'k';
+        this.Spaces[3][y].Piece.piece = 'b';
+        this.Spaces[4][y].Piece.piece = 'Q';
+        this.Spaces[5][y].Piece.piece = 'K';
+        this.Spaces[6][y].Piece.piece = 'b';
+        this.Spaces[7][y].Piece.piece = 'k';
+        this.Spaces[8][y].Piece.piece = 'r';
+
+        // initialize pawns
+        for (var x = 1; x <= this.width; x++) {
+            this.WhitePieces.push({
+                x: x,
+                y: 1,
+            })
+            this.WhitePieces.push({
+                x: x,
+                y: 2,
+            })
+            y = 2;
+            this.Spaces[x][y].Piece.team = 'w'
+            this.Spaces[x][y].Piece.piece = 'p'
+            this.BlackPieces.push({
+                x: x,
+                y: 7,
+            })
+            this.BlackPieces.push({
+                x: x,
+                y: 8,
+            })
+            y = 7;
+            this.Spaces[x][y].Piece.team = 'b'
+            this.Spaces[x][y].Piece.piece = 'p'
+        }
+        // initialize black back row
+        team = 'b'
+        y = 8;
+        for (var x = 1; x <= this.width; x++) {
+            this.Spaces[x][y].Piece.team = team;
+        }
+        this.Spaces[1][y].Piece.piece = 'r';
+        this.Spaces[2][y].Piece.piece = 'k';
+        this.Spaces[3][y].Piece.piece = 'b';
+        this.Spaces[4][y].Piece.piece = 'Q';
+        this.Spaces[5][y].Piece.piece = 'K';
+        this.Spaces[6][y].Piece.piece = 'b';
+        this.Spaces[7][y].Piece.piece = 'k';
+        this.Spaces[8][y].Piece.piece = 'r';
+
+        if (turn == 'w') {
+            for (i in this.WhitePieces) {
+                this.Spaces[this.WhitePieces[i].x][this.WhitePieces[i].y].Piece.PopulateMoves();
+            }
+        } else if (turn == 'b') {
+            for (i in this.BlackPieces) {
+                this.Spaces[this.BlackPieces[i].x][this.BlackPieces[i].y].Piece.PopulateMoves();
+            }
+        }
+    },
+
+    Display: function () {
         stroke('black')
-        if ((x + y) % 2 == 0){
-          fill('purple');
-        }else{
-          fill('white');
+        for (var x = 1; x <= this.width; x++) {
+            for (var y = 1; y <= this.height; y++) {
+                if ((y + x) % 2 == 0) {
+                    fill(0, 0, 0, 100)
+                } else { fill(255, 255, 255, 100) }
+                square(x * k, y * k, k)
+            }
         }
-        square(x*k,y*k,k);
-      }
-    }
-    for(i = 0; i < this.pieces.length; i++){
-      this.pieces[i].display();
-    }
-  },
-  logic : function(id){
-    let moves = [];
-    if (this.pieces[id].dead == false){
-      switch (this.pieces[id].type) {
-        case 'pawn':
-          moves = this.pieces[id].movepawn(id, this.pieces);
-          break;
+        for (var i in this.BlackPieces) {
+        //    highlight(this.BlackPieces[i].x, this.BlackPieces[i].y, 'purple');
+            this.Spaces[this.BlackPieces[i].x][this.BlackPieces[i].y].Piece.display();
+        }
+        for (var i in this.WhitePieces) {
+        //    highlight(this.WhitePieces[i].x, this.WhitePieces[i].y, 'teal');
+            this.Spaces[this.WhitePieces[i].x][this.WhitePieces[i].y].Piece.display();
+        }
+        if (this.selected.x != 0 && this.selected.y != 0) {
+            //console.log(this.Spaces[this.selected.x][this.selected.y].Piece.Moves.length)
+            //for (var i in this.Spaces[this.selected.x][this.selected.y].Piece.Moves) {
+            //    highlight(this.Spaces[this.selected.x][this.selected.y].Piece.Moves[i].x, this.Spaces[this.selected.x][this.selected.y].Piece.Moves[i].y, 'green')
+            //}
+            //console.log(this.Spaces[this.selected.x][this.selected.y].Piece.Takes.length)
+            //for (var i in this.Spaces[this.selected.x][this.selected.y].Piece.Takes) {
+            //    highlight(this.Spaces[this.selected.x][this.selected.y].Piece.Takes[i].x, this.Spaces[this.selected.x][this.selected.y].Piece.Takes[i].y, 'red')
+            //}
+            //for (var i in this.Spaces[this.selected.x][this.selected.y].Piece.Castling) {
+            //    highlight(this.Spaces[this.selected.x][this.selected.y].Piece.Castling[i].x, this.Spaces[this.selected.x][this.selected.y].Piece.Castling[i].y, 'gold')
+            //}
+            //for (var i in this.Spaces) {
+            //    for (var j in this.Spaces[i]) {
+            //        if (this.Spaces[i][j].Possession.Black == true) {
+            //            highlight(i, j, 'black')
+            //        }
+            //        if (this.Spaces[i][j].Possession.White == true) {
+            //            highlight(i, j, 'white')
+            //        }
+            //    }
+            //}
+        }
 
-        case 'rook':
-          moves = this.pieces[id].moverook(id, this.pieces);
-          break;
+    },
 
-        case 'knight':
-          moves = this.pieces[id].moveknight(id, this.pieces);
-          break;
+};
 
-        case 'bishop':
-          moves = this.pieces[id].movebishop(id, this.pieces);
-          break;
-
-        case 'queen':
-          moves = this.pieces[id].movequeen(id, this.pieces);
-          break;
-
-        case 'king':
-          moves = this.pieces[id].moveking(id, this.pieces);
-          break;
-      }
-      console.log(moves)
-      this.pieces[id].moves = moves;
-      console.log(this.pieces[id].moves)
-    }
-  },
+function Space(x,y) {
+    this.Piece = new Piece('e','e',x,y);
+    this.Possession = {
+        Black: false,
+        White: false,
+    };
 }
 
-function Piece(x,y,type,player){
-  this.type = type;
-  this.player = player;
+function Piece(Team, Piece, x, y) {
+    this.team = Team;
+    this.piece = Piece;
+    this.Moves = [];
+    this.Takes = [];
+    this.Castling = [];
+    this.firstMove = true;
+    this.Position = {
+        x: x,
+        y: y,
+    };
 
-  this.x = x;
-  this.y = y;
 
-  this.moved = false;
-  this.dead = false;
-
-  this.moves = [];
-
-  this.display = function(){
-    //piece sprite
-    if (this.dead == false){
-      switch (this.type){
-        case 'pawn':
-          if (this.player == 1){
-            image(sprites.pawnW, this.x * k, this.y * k);
-          }else{
-            image(sprites.pawnB, this.x * k, this.y * k);
-          }
-        break;
-        case 'rook':
-          if (this.player == 1){
-            image(sprites.rookW, this.x * k, this.y * k);
-          }else{
-            image(sprites.rookB, this.x * k, this.y * k);
-          }
-        break;
-        case 'knight':
-          if (this.player == 1){
-            image(sprites.knightW, this.x * k, this.y * k);
-          }else{
-            image(sprites.knightB, this.x * k, this.y * k);
-          }
-        break;
-        case 'bishop':
-          if (this.player == 1){
-            image(sprites.bishopW, this.x * k, this.y * k);
-          }else{
-            image(sprites.bishopB, this.x * k, this.y * k);
-          }
-        break;
-        case 'queen':
-          if (this.player == 1){
-            image(sprites.queenW, this.x * k, this.y * k);
-          }else{
-            image(sprites.queenB, this.x * k, this.y * k);
-          }
-        break;
-        case 'king':
-          if (this.player == 1){
-            image(sprites.kingW, this.x * k, this.y * k);
-          }else{
-            image(sprites.kingB, this.x * k, this.y * k);
-          }
-        break;
-      }
-    }
-  }
-
-  this.movequeen = function(id, Others){
-    let n = 1;
-    let moves = [];
-
-    //loop forward
-    var take = 0;
-    while (take == 0 && (this.y + n) < 8){
-      take = moveTill(this.player,  this.x, this.y + n, id, Others);
-      moves.push(new Move(take, this.x, this.y + n));
-      n++;
-    }
-    n = 1;
-    //loop right
-    take = 0
-    while (take == 0 && (this.x + n) < 8){
-      take = moveTill(this.player, this.x + n, this.y, id, Others)
-      moves.push(new Move(take, this.x + n, this.y));
-      n++;
-    }
-    n = 1;
-    //loop left
-    take = 0
-    while (take == 0 && (this.x - n) >= 0){
-      take = moveTill(this.player, this.x - n, this.y, id, Others)
-      moves.push(new Move(take, this.x - n, this.y));
-      n++;
-    }
-    n = 1;
-    //loop backwards
-    take = 0
-    while (take == 0 && (this.y - n) >= 0){
-      take = moveTill(this.player, this.x, this.y - n, id, Others)
-      moves.push(new Move(take, this.x, this.y - n));
-      n++;
-    }
-    n = 1;
-    //loop diagonal
-    take = 0;
-    while (take == 0 && (this.y + n) < 8 && (this.x + n) < 8){
-      take = moveTill(this.player, this.x + n, this.y + n, id, Others)
-      moves.push(new Move(take, this.x + n, this.y + n));
-      n++;
-    }
-    n = 1;
-    //loop diagonal
-    take = 0;
-    while (take == 0 && (this.x + n) < 8 && (this.y - n) >= 0){
-      take = moveTill(this.player, this.x + n, this.y - n, id, Others)
-      moves.push(new Move(take, this.x + n, this.y - n));
-      n++;
-    }
-    n = 1;
-    //loop diagonal
-    take = 0;
-    while (take == 0 && (this.x - n) >= 0 && (this.y + n) < 8){
-      take = moveTill(this.player, this.x - n, this.y + n, id, Others)
-      moves.push(new Move(take, this.x - n, this.y + n));
-      n++;
-    }
-    n = 1;
-    //loop diagonal
-    take = 0;
-    while (take == 0 && (this.y - n) >= 0 && (this.x - n) >= 0){
-      take = moveTill(this.player, this.x - n, this.y - n, id, Others)
-      moves.push(new Move(take, this.x - n, this.y - n));
-      n++
-    }
-
-    return moves;
-  }
-  this.moveking = function(id, Others){
-    let moves = [];
-    //1 block away movement
-    for (plx = -1; plx <= 1; plx++){
-      for (ply = -1; ply <= 1; ply++){
-        take = testtake(this.player, this.x + plx, this.y + ply, id, Others);
-        if (take == 0){
-          take = stepto(this.x + plx, this.y + ply, id, Others);
-        }
-        moves.push(new Move(take, this.x + plx, this.y + ply));
-      }
-    }
-    //castleing
-    rightC = -1;
-    leftC = -1;
-    var n = 1;
-    var space = 0;
-    if (this.moved == false){
-      //loop right
-      while(space < 1 && (this.x + n) < 8){
-        space = testtake(this.player, this.x + n, this.y, id, Others)
-        if (space == 1){
-          castle = testPiece('rook', this.x + n, this.y, Others);
-          if (castle != -1){
-            if (board.pieces[castle].moves == 0){
-              rightC = castle;
-              moves.push(new Move(true, this.x + n, this.y));
+    this.checkTake = function (dx, dy) {
+        var x = this.Position.x + dx;
+        var y = this.Position.y + dy;
+        if (x >= 1 && x <= 8 && y >= 1 && y <= 8) {
+            this.TakePossession(x, y);
+            if (Board.Spaces[x][y].Piece.piece != 'e' && Board.Spaces[x][y].Piece.team != this.team) {
+                if (Board.Spaces[x][y].Piece.piece == 'K') {
+                    if (this.team == 'w') {
+                        Board.BlackCheck = true;
+                    } else if (this.team == 'b') {
+                        Board.WhiteCheck = true;
+                    }
+                }
+                this.Takes.push({
+                    x: x,
+                    y: y,
+                })
             }
-          }
         }
-        n++
-      }
+    };
 
-      //loop left
-      n = 1;
-      space = 0;
-      while(space < 1 && (this.x - n) >= 0){
-        space = testtake(this.player, this.x - n, this.y, id, Others)
-        if (space == 1){
-          castle = testPiece('rook', this.x - n, this.y, Others);
-          if (castle != -1){
-            if (board.pieces[castle].moves == 0){
-              leftC = castle;
-              moves.push(new Move(true, this.x - n, this.y));
+    this.checkMove = function (dx, dy) {
+        var x = this.Position.x + dx;
+        var y = this.Position.y + dy;
+        if (x >= 1 && x <= 8 && y >= 1 && y <= 8) {
+            if (Board.Spaces[x][y].Piece.piece == 'e') {
+                this.Moves.push({
+                    x: x,
+                    y: y,
+                })
             }
-          }
         }
-        n++
-      }
-    }
-    return moves;
-  }
-  this.movepawn = function(id, Others){
-    let moves = [];
+    };
 
-    //move forwards
-    let take = stepto(this.x, this.y + this.player, id, Others)
-    //first move
-    if (take == 0){
-      moves.push(new Move(take, this.x, this.y + this.player))
-    }
+    this.checkDirection = function (dx, dy) {
+        var x = this.Position.x + dx;
+        var y = this.Position.y + dy;
+        while (x >= 1 && x <= 8 && y >= 1 && y <= 8) {
+            if (Board.Spaces[x][y].Piece.piece == 'e') {
+                this.Moves.push({
+                    x: x,
+                    y: y,
+                })
+                this.TakePossession(x,y);
+            } else { break }
+            x += dx;
+            y += dy;
+        }
+        this.checkTake(x - this.Position.x, y - this.Position.y);
+    };
 
-    if (this.moved == false){
-      take = stepto(this.x, this.y + 2 * this.player, id, Others)
-      if (take == 0){
-        moves.push(new Move(take, this.x, this.y + 2 * this.player))
-      }
-    }
 
-    //take diagonal
-    take = testtake(this.player, this.x + 1, this.y + this.player, id, Others);
-    if (take > 1){
-      moves.push(new Move(take, this.x + 1, this.y + this.player))
-    }
-    take = testtake(this.player, this.x - 1, this.y + this.player, id, Others);
-    if (take > 1){
-      moves.push(new Move(take, this.x - 1, this.y + this.player))
-    }
+    this.PopulateMoves = function () {
+        this.Moves.pop(this.Moves.length);
+        this.Takes.pop(this.Takes.length);
+        this.Castling.pop(this.Castling.length)
 
-    return moves;
-  }
-  this.moverook = function(id, Others){
-    let moves = [];
+        switch (this.piece) {
+            case 'r':
+                //check LEFT
+                this.checkDirection(-1, 0)
+                //check RIGHT
+                this.checkDirection(1, 0)
+                //check UP
+                this.checkDirection(0, -1)
+                //check DOWN
+                this.checkDirection(0, 1)
+                break;
+            case 'k':
+                this.checkMove(2, 1)
+                this.checkTake(2, 1)
+                this.checkMove(-2, 1)
+                this.checkTake(-2, 1)
+                this.checkMove(2, -1)
+                this.checkTake(2, -1)
+                this.checkMove(-2, -1)
+                this.checkTake(-2, -1)
+                this.checkMove(1, 2)
+                this.checkTake(1, 2)
+                this.checkMove(-1, 2)
+                this.checkTake(-1, 2)
+                this.checkMove(1, -2)
+                this.checkTake(1, -2)
+                this.checkMove(-1, -2)
+                this.checkTake(-1, -2)
+                break;
+            case 'b':
+                //check LEFT UP
+                this.checkDirection(-1, -1)
+                //check RIGHT UP
+                this.checkDirection(1, -1)
+                //check LEFT DOWN
+                this.checkDirection(-1, 1)
+                //check RIGHT DOWN
+                this.checkDirection(1, 1)
+                break;
+            case 'Q':
+                //check LEFT
+                this.checkDirection(-1, 0)
+                //check RIGHT
+                this.checkDirection(1, 0)
+                //check UP
+                this.checkDirection(0, -1)
+                //check DOWN
+                this.checkDirection(0, 1)
+                //check LEFT UP
+                this.checkDirection(-1, -1)
+                //check RIGHT UP
+                this.checkDirection(1, -1)
+                //check LEFT DOWN
+                this.checkDirection(-1, 1)
+                //check RIGHT DOWN
+                this.checkDirection(1, 1)
+                break;
+            case 'K':
+                for (var x = -1; x <= 1; x++) {
+                    for (var y = -1; y <= 1; y++) {
+                        if (this.Position.x + x >= 1 && this.Position.x + x <= 8 && this.Position.y + y >= 1 && this.Position.y + y <= 8) {
+                            if ((this.team == 'w' && Board.Spaces[this.Position.x + x][this.Position.y + y].Possession.Black == false) || (this.team == 'b' && Board.Spaces[this.Position.x + x][this.Position.y + y].Possession.White == false)) {
+                                this.checkMove(x, y);
+                                this.checkTake(x, y);
+                            }
+                        }
+                    }
+                }
+                if (this.firstMove == true) {
+                    //castling.
+                    if (this.team == 'w') {
+                        if (Board.WhiteCheck == false) {
+                            if (Board.Spaces[this.Position.x - 1][this.Position.y].Possession.Black == false && Board.Spaces[this.Position.x - 1][this.Position.y].Piece.piece == 'e') {
+                                if (Board.Spaces[this.Position.x - 2][this.Position.y].Possession.Black == false && Board.Spaces[this.Position.x - 2][this.Position.y].Piece.piece == 'e') {
+                                    if (Board.Spaces[this.Position.x - 3][this.Position.y].Possession.Black == false && Board.Spaces[this.Position.x - 3][this.Position.y].Piece.piece == 'e') {
+                                        if (Board.Spaces[this.Position.x - 4][this.Position.y].Piece.firstMove == true) {
+                                            this.Castling.push({
+                                                x: this.Position.x - 2,
+                                                y: this.Position.y,
+                                            })
+                                        }
+                                    }
+                                }
+                            }
+                            if (Board.Spaces[this.Position.x + 1][this.Position.y].Possession.Black == false && Board.Spaces[this.Position.x + 1][this.Position.y].Piece.piece == 'e') {
+                                if (Board.Spaces[this.Position.x + 2][this.Position.y].Possession.Black == false && Board.Spaces[this.Position.x + 2][this.Position.y].Piece.piece == 'e') {
+                                    if (Board.Spaces[this.Position.x + 3][this.Position.y].Piece.firstMove == true) {
+                                        this.Castling.push({
+                                            x: this.Position.x + 2,
+                                            y: this.Position.y,
+                                        })
+                                    }
+                                }
+                            }
+                        }
+                    } else if (this.team == 'b') {
+                        if (Board.BlackCheck == false) {
+                            if (Board.Spaces[this.Position.x - 1][this.Position.y].Possession.White == false && Board.Spaces[this.Position.x - 1][this.Position.y].Piece.piece == 'e') {
+                                if (Board.Spaces[this.Position.x - 2][this.Position.y].Possession.White == false && Board.Spaces[this.Position.x - 2][this.Position.y].Piece.piece == 'e') {
+                                    if (Board.Spaces[this.Position.x - 3][this.Position.y].Possession.White == false && Board.Spaces[this.Position.x - 3][this.Position.y].Piece.piece == 'e') {
+                                        if (Board.Spaces[this.Position.x - 4][this.Position.y].Piece.firstMove == true) {
+                                            this.Castling.push({
+                                                x: this.Position.x - 2,
+                                                y: this.Position.y,
+                                            })
+                                        }
+                                    }
+                                }
+                            }
+                            if (Board.Spaces[this.Position.x + 1][this.Position.y].Possession.White == false && Board.Spaces[this.Position.x + 1][this.Position.y].Piece.piece == 'e') {
+                                if (Board.Spaces[this.Position.x + 2][this.Position.y].Possession.White == false && Board.Spaces[this.Position.x + 2][this.Position.y].Piece.piece == 'e') {
+                                    if (Board.Spaces[this.Position.x + 3][this.Position.y].Piece.firstMove == true) {
+                                        this.Castling.push({
+                                            x: this.Position.x + 2,
+                                            y: this.Position.y,
+                                        })
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                break;
+            case 'p':
+                //check Forewards.
+                if (this.team == 'w') {
+                    this.checkMove(0, 1);
+                    this.checkTake(1, 1);
+                    this.checkTake(-1, 1);
+                    if (this.firstMove == true) {
+                        this.checkMove(0, 2);
+                    }
+                } else if (this.team == 'b') {
+                    this.checkMove(0, -1);
+                    this.checkTake(1, -1);
+                    this.checkTake(-1, -1);
+                    if (this.firstMove == true) {
+                        this.checkMove(0, -2);
+                    }
+                }
+                break;
+        }
 
-    let n = 1;
-    //loop forward
-    take = 0;
-    while (take == 0 && (this.y + n) < 8){
-      take = moveTill(this.player,  this.x, this.y + n, id, Others);
-      moves.push(new Move(take, this.x, this.y + n));
-      n++;
-    }
+    };
 
-    n = 1;
-    //loop right
-    take = 0;
-    while (take == 0 && (this.x + n) < 8){
-      take = moveTill(this.player, this.x + n, this.y, id, Others);
-      moves.push(new Move(take, this.x + n, this.y));
-      n++;
-    }
+    this.TakePossession = function (x,y) {
+        if (this.team == 'b') {
+            Board.Spaces[x][y].Possession.Black = true;
+        }
+        if (this.team == 'w') {
+            Board.Spaces[x][y].Possession.White = true;
+        }
+    };
 
-    n = 1;
-    //loop left
-    take = 0;
-    while (take == 0 && (this.x - n) >= 0){
-      take = moveTill(this.player, this.x - n, this.y, id, Others);
-      moves.push(new Move(take, this.x - n, this.y));
-      n++;
-    }
-
-    n = 1;
-    //loop backwards
-    take = 0;
-    while (take == 0 && (this.y - n) >= 0){
-      take = moveTill(this.player, this.x, this.y - n, id, Others);
-      moves.push(new Move(take, this.x, this.y - n));
-      n++;
-    }
-
-    return moves;
-  }
-  this.movebishop = function(id, Others){
-    let moves = [];
-
-    let n = 1;
-    //loop diagonal
-    take = 0;
-    while (take == 0 && (this.y + n) < 8 && (this.x + n) < 8){
-      take = moveTill(this.player, this.x + n, this.y + n, id, Others)
-      moves.push(new Move(take, this.x + n, this.y + n));
-      n++
-    }
-
-    n = 1;
-    //loop diagonal
-    take = 0;
-    while (take == 0 && (this.x + n) < 8 && (this.y - n) >= 0){
-      take = moveTill(this.player, this.x + n, this.y - n, id, Others)
-      moves.push(new Move(take, this.x + n, this.y - n));
-      n++
-    }
-
-    n = 1;
-    //loop diagonal
-    take = 0;
-    while (take == 0 && (this.x - n) >= 0 && (this.y + n) < 8){
-      take = moveTill(this.player, this.x - n, this.y + n, id, Others)
-      moves.push(new Move(take, this.x - n, this.y + n));
-      n++
-    }
-
-    n = 1;
-    //loop diagonal
-    take = 0;
-    while (take == 0 && (this.y - n) >= 0 && (this.x - n) >= 0){
-      take = moveTill(this.player, this.x - n, this.y - n, id, Others)
-      moves.push(new Move(take, this.x - n, this.y - n));
-      n++
-    }
-
-    return moves;
-  }
-  this.moveknight = function(id, Others){
-    //2 over + left right
-    let moves = [];
-
-    for (r = -1; r <= 1; r+=2){
-      take = testtake(this.player, this.x + r, this.y + 2, id, Others);
-      moves.push(new Move(take, this.x + r, this.y + 2));
-      take = testtake(this.player, this.x + r, this.y - 2, id, Others);
-      moves.push(new Move(take, this.x + r, this.y - 2));
-      take = testtake(this.player, this.x + 2, this.y + r, id, Others);
-      moves.push(new Move(take, this.x + 2, this.y + r));
-      take = testtake(this.player, this.x - 2, this.y + r, id, Others);
-      moves.push(new Move(take, this.x - 2, this.y + r));
-    }
-
-    return moves;
-  }
+    this.display = function () {
+        //piece sprite
+        switch (this.piece) {
+            case 'p':
+                if (this.team == 'w') {
+                    image(sprites.pawnW, this.Position.x * k, this.Position.y * k);
+                } else if (this.team == 'b') {
+                    image(sprites.pawnB, this.Position.x * k, this.Position.y * k);
+                }
+                break;
+            case 'r':
+                if (this.team == 'w') {
+                    image(sprites.rookW, this.Position.x * k, this.Position.y * k);
+                } else if (this.team == 'b') {
+                    image(sprites.rookB, this.Position.x * k, this.Position.y * k);
+                }
+                break;
+            case 'k':
+                if (this.team == 'w') {
+                    image(sprites.knightW, this.Position.x * k, this.Position.y * k);
+                } else if (this.team == 'b') {
+                    image(sprites.knightB, this.Position.x * k, this.Position.y * k);
+                }
+                break;
+            case 'b':
+                if (this.team == 'w') {
+                    image(sprites.bishopW, this.Position.x * k, this.Position.y * k);
+                } else if (this.team == 'b') {
+                    image(sprites.bishopB, this.Position.x * k, this.Position.y * k);
+                }
+                break;
+            case 'Q':
+                if (this.team == 'w') {
+                    image(sprites.queenW, this.Position.x * k, this.Position.y * k);
+                } else if (this.team == 'b') {
+                    image(sprites.queenB, this.Position.x * k, this.Position.y * k);
+                }
+                break;
+            case 'K':
+                if (this.team == 'w') {
+                    image(sprites.kingW, this.Position.x * k, this.Position.y * k);
+                } else if (this.team == 'b') {
+                    image(sprites.kingB, this.Position.x * k, this.Position.y * k);
+                }
+                break;
+        }
+    };
 }
 
 function Center(i) {
-  return i * k + k / 2;
+    return i * k + k / 2;
 }
 
-function highlight(x,y,color){
-  noFill();
-  stroke(color);
-  square(x * k, y * k, k)
-  noStroke();
+function highlight(x, y, color) {
+    noFill();
+    stroke(color);
+    square(x * k, y * k, k);
+    noStroke();
 }
 
-function Move(valid,x,y){
-  this.prWhite = false;
-  this.prBlack = false;
-  this.valid = valid;
-  this.team;
-  this.x = x;
-  this.y = y;
-}
-
-function moveTill(team, x, y, id, Others){
-  let take = testtake(team, x, y, id, Others);
-  if (take == 0){
-    take = stepto(x, y, id, Others)
-  }
-  return take;
-}
-
-function stepto(x,y, id, Others){
-  if (x >= 0 && x < 8 && y >= 0 && y < 8){
-    let potential = new Move(0, x, y);
-    for (i = 0; i < Others.length; i++){
-      if (Others[i].dead == false){
-        if (Others[i].x == potential.x && Others[i].y == potential.y){
-          potential.valid = 1;
-        }
-      }
+function preload() {
+    //Piece Sprites
+    sprites = {
+        bishopB: loadImage('../Sprites/Chess/BishopB.png'),
+        bishopW: loadImage('../Sprites/Chess/BishopW.png'),
+        rookB: loadImage('../Sprites/Chess/RookB.png'),
+        rookW: loadImage('../Sprites/Chess/RookW.png'),
+        kingB: loadImage('../Sprites/Chess/KingB.png'),
+        kingW: loadImage('../Sprites/Chess/KingW.png'),
+        queenB: loadImage('../Sprites/Chess/QueenB.png'),
+        queenW: loadImage('../Sprites/Chess/QueenW.png'),
+        knightB: loadImage('../Sprites/Chess/KnightB.png'),
+        knightW: loadImage('../Sprites/Chess/KnightW.png'),
+        pawnB: loadImage('../Sprites/Chess/PawnB.png'),
+        pawnW: loadImage('../Sprites/Chess/PawnW.png'),
     }
-
-    return potential.valid
-  }
 }
 
-function testtake(Team, x, y, id, Others){
-  if (x >= 0 && x < 8 && y >= 0 && y < 8){
-    let potential = new Move(0, x, y);
-    for (i = 0; i < Others.length; i++){
-      if (Others[i].dead == false){
-        if (Others[i].x == potential.x && Others[i].y == potential.y){
-          if (Others[i].player == Team){
-            potential.valid = 1;
-          }else if (testPiece('king', potential.x, potential.y) != -1){
-            potential.valid = 3;
-          }else {
-            potential.valid = 2;
-          }
-        }
+function StartGame(data) {
+    console.log('ye');
+    Board.Initialize();
+    
+    Player = '';
+    turn = 'w';
+    playing = true;
 
-      }
+}
+
+function OpenFile(data) {
+    //console.log(data)
+    Board.selected.x = data.selected.x;
+    Board.selected.y = data.selected.y;
+    Board.move.x = data.move.x;
+    Board.move.y = data.move.y;
+    Board.move.Take = data.move.Take;
+    Board.move.Castling = data.move.Castling;
+
+    if (turn != Player) {
+        Board.TurnChange();
     }
-    return potential.valid;
-  }
-}
-
-function testPiece(piece,x,y){
-  var id = -1;
-  for (i = 0; i < board.pieces.length; i++){
-    if (board.pieces[i].dead == false){
-      if (board.pieces[i].x == x && board.pieces[i].y == y){
-        if (board.pieces[i].type == piece){
-           id = i;
-        }
-      }
-    }
-  }
-  return id;
-}
-
-function preload(){
-  //Piece Sprites
-  sprites = {
-    bishopB : loadImage('../Sprites/Chess/BishopB.png'),
-    bishopW : loadImage('../Sprites/Chess/BishopW.png'),
-    rookB : loadImage('../Sprites/Chess/RookB.png'),
-    rookW : loadImage('../Sprites/Chess/RookW.png'),
-    kingB : loadImage('../Sprites/Chess/KingB.png'),
-    kingW : loadImage('../Sprites/Chess/KingW.png'),
-    queenB : loadImage('../Sprites/Chess/QueenB.png'),
-    queenW : loadImage('../Sprites/Chess/QueenW.png'),
-    knightB : loadImage('../Sprites/Chess/KnightB.png'),
-    knightW : loadImage('../Sprites/Chess/KnightW.png'),
-    pawnB : loadImage('../Sprites/Chess/PawnB.png'),
-    pawnW : loadImage('../Sprites/Chess/PawnW.png'),
-  }
-}
-
-function StartGame(){
-  board.populate();
-  var i;
-  for (i = 1; i < board.pieces.length; i++){
-    console.log(i)
-    console.log(board.pieces.length)
-    board.logic(i);
-  }
 }
 
 function setup() {
-  createCanvas(k * 11, k * 10);
+    createCanvas(k * 11, k * 10);
 
-  var server = 'http://localhost:3000';
-  socket = io.connect(server)
-  socket.emit('game', "Chess");
+    //var server = 'https://bcae0f017e6c.ngrok.io';
+    var server = 'http://localhost:3000'
 
-  sprites.bishopB.resize(k,0);
-  sprites.bishopW.resize(k,0);
-  sprites.rookB.resize(k,0);
-  sprites.rookW.resize(k,0);
-  sprites.kingB.resize(k,0);
-  sprites.kingW.resize(k,0);
-  sprites.queenB.resize(k,0);
-  sprites.queenW.resize(k,0);
-  sprites.knightB.resize(k,0);
-  sprites.knightW.resize(k,0);
-  sprites.pawnB.resize(k,0);
-  sprites.pawnW.resize(k,0);
+    socket = io.connect(server)
+    socket.emit('game', "Chess");
+    socket.on('Chessturn', OpenFile);
+    socket.on('newGame', StartGame);
 
+    sprites.bishopB.resize(k, 0);
+    sprites.bishopW.resize(k, 0);
+    sprites.rookB.resize(k, 0);
+    sprites.rookW.resize(k, 0);
+    sprites.kingB.resize(k, 0);
+    sprites.kingW.resize(k, 0);
+    sprites.queenB.resize(k, 0);
+    sprites.queenW.resize(k, 0);
+    sprites.knightB.resize(k, 0);
+    sprites.knightW.resize(k, 0);
+    sprites.pawnB.resize(k, 0);
+    sprites.pawnW.resize(k, 0);
+
+    playing = false;
 
 }
 
 function draw() {
-  background(130);
-  if (playing == true){
-    board.display();
-    if (turn == 1){
-      fill('white');
-    }else{
-      fill('black');
-    }
-    circle(9*(k), k, k);
+    background(130);
+    if (playing == true) {
+        selector(mouseX, mouseY, 'white');
+        Board.Display();
 
-    if (selected != -1){
-      for (m = 0; m < board.pieces[selected].moves.length; m++){
-        if (board.pieces[selected].moves[m].valid != 1 && board.pieces[selected].moves[m].valid != 3){
-          highlight(board.pieces[selected].moves[m].x,board.pieces[selected].moves[m].y,'yellow');
+        if (Board.move.x != 0 && Board.move.y != 0) {
+            Board.TurnChange();
         }
-      }
+
+        highlight(Board.selected.x, Board.selected.y, 'yellow')
+
+        if (turn == 'w') {
+            fill('white');
+        } else {
+            fill('black');
+        }
+
+        circle(10 * (k), k, k);
+        if (Player != 'b') {
+            image(sprites.kingW, 9.5 * k, 1.5 * k);
+        }
+        if (Player != 'w') {
+            image(sprites.kingB, 9.5 * k, 2.5 * k);
+        }
     }
-  }
-  selector(mouseX,mouseY,'red');
 }
 
-function selector(x,y,color){
-  fill(color);
-  circle(x,y,k/4);
-  if (selected != -1){
-    highlight(board.pieces[selected].x,board.pieces[selected].y,color);
-  }
+function selector(x, y, color) {
+    fill(color);
+    circle(x, y, k / 4);
 }
 
-function Scanboard(Board, selected, move){
-  let spaces = [];
-  for(x = 0; x < this.x; x++){
-    spaces[x] = []
-    for(y = 0; y < this.y; y++){
-      spaces[x][y] = new Move(true,x,y);
+function keyPressed() {
+    if (key == 'p') {
+        socket.emit('startNewGame');
+        console.log('playing')
     }
-  }
-  makeMove(selected, move, Board.piece[selected], Board)
-  for (n = 0; n < Board.pieces.length; n++){
-    Board.logic(n);
-    for (p = 0; p < Board.moves.length; p++){
-      if (Board.pieces[n].player == 1){
-        spaces[moves[p].x][moves[p].y].prWhite = true;
-      }else if (Board.pieces[n].player == -1){
-        spaces[moves[p].x][moves[p].y].prBlack = true;
-      }
-    }
-  }
-  if (Board.spaces[Board.pieces[whiteking].x][Board.pieces[whiteking].y].prBlack == true){
-    return false;
-  }else if (Board.spaces[Board.pieces[blackking].x][Board.pieces[blackking].y].prWhite == true){
-    return false;
-  }else{
-    return true;
-  }
-
 }
 
-function keyPressed(key){
-  if (key = 'p'){
-    StartGame();
-  }
-}
-
-function makeMove(n,m,piece,board){
-  if (leftC != -1){
-    if (board.pieces[n].moves[m].x == board.pieces[leftC].x){
-      board.pieces[leftC].x = piece.x;
-      leftC = -1
+function mousePressed() {
+    if (mouseX >= 9.5 * k && mouseX < 10.5 * k && mouseY >= 1.5 * k && mouseY < 2.5 * k && Player == '') {
+        Player = 'w';
+    } else if (mouseX >= 9.5 * k && mouseX < 10.5 * k && mouseY >= 2.5 * k && mouseY < 3.5 * k && Player == '') {
+        Player = 'b';
     }
-  }
-
-  if (rightC != -1){
-    if (board.pieces[n].moves[m].x == board.pieces[rightC].x){
-      board.pieces[rightC].x = piece.x;
-      rightC = -1
+    if (mouseX >= k && mouseX <= k * (Board.width + 1)) {
+        if (mouseY >= k && mouseY <= k * (Board.height + 1)) {
+            //selecting pieces
+            if (turn == 'w' && Player == 'w') {
+                for (i in Board.WhitePieces) {
+                    if (floor(mouseX / k) == Board.WhitePieces[i].x && floor(mouseY / k) == Board.WhitePieces[i].y) {
+                        Board.selected.x = floor(mouseX / k);
+                        Board.selected.y = floor(mouseY / k);
+                        Board.move.x = 0;
+                        Board.move.y = 0;
+                    }
+                }
+            }
+            if (turn == 'b' && Player == 'b') {
+                for (i in Board.BlackPieces) {
+                    if (floor(mouseX / k) == Board.BlackPieces[i].x && floor(mouseY / k) == Board.BlackPieces[i].y) {
+                        Board.selected.x = floor(mouseX / k);
+                        Board.selected.y = floor(mouseY / k);
+                        Board.move.x = 0;
+                        Board.move.y = 0;
+                    }
+                }
+            }
+            //selecting Moves
+            if (Board.selected.x != 0 && Board.selected.y != 0) {
+                // moves
+                // Castling
+                if (Board.Spaces[Board.selected.x][Board.selected.y].Piece.Castling.length > 0) {
+                    for (i in Board.Spaces[Board.selected.x][Board.selected.y].Piece.Castling) {
+                        if (floor(mouseX / k) == Board.Spaces[Board.selected.x][Board.selected.y].Piece.Castling[i].x && floor(mouseY / k) == Board.Spaces[Board.selected.x][Board.selected.y].Piece.Castling[i].y) {
+                            Board.move.x = floor(mouseX / k);
+                            Board.move.y = floor(mouseY / k);
+                            Board.move.Castling = true;
+                            move = true;
+                        }
+                    }
+                }
+                if (Board.Spaces[Board.selected.x][Board.selected.y].Piece.Moves.length > 0) {
+                    for (i in Board.Spaces[Board.selected.x][Board.selected.y].Piece.Moves) {
+                        if (floor(mouseX / k) == Board.Spaces[Board.selected.x][Board.selected.y].Piece.Moves[i].x && floor(mouseY / k) == Board.Spaces[Board.selected.x][Board.selected.y].Piece.Moves[i].y) {
+                            Board.move.x = floor(mouseX / k);
+                            Board.move.y = floor(mouseY / k);
+                            move = true;
+                        }
+                    }
+                }
+                // takes
+                if (Board.Spaces[Board.selected.x][Board.selected.y].Piece.Takes.length > 0) {
+                    for (i in Board.Spaces[Board.selected.x][Board.selected.y].Piece.Takes) {
+                        if (floor(mouseX / k) == Board.Spaces[Board.selected.x][Board.selected.y].Piece.Takes[i].x && floor(mouseY / k) == Board.Spaces[Board.selected.x][Board.selected.y].Piece.Takes[i].y) {
+                            Board.move.x = floor(mouseX / k);
+                            Board.move.y = floor(mouseY / k);
+                            Board.move.Take = true;
+                            move = true;
+                        }
+                    }
+                }
+            }
+        }
     }
-  }
-  piece.x = board.pieces[n].moves[m].x;
-  piece.y = board.pieces[n].moves[m].y;
-  board.pieces[n] = piece;
-  board.pieces[n].moved = true
-  //taking
-  for (var i = 0; i < board.pieces.length; i++){
-    if (board.pieces[i].x == board.pieces[n].moves[m].x && board.pieces[i].y == board.pieces[n].moves[m].y && board.pieces[i].player != turn){
-        board.pieces[i].dead = true;
-    }
-  }
-  return piece;
-}
-
-function mousePressed(){
-  if ((mouseX > 0 && mouseX < 8 * k) && (mouseY > 0 && mouseY < 8 * k)) {
-    move = 0;
-    while (selected != -1 && move < board.pieces[selected].moves.length){
-      if (floor(mouseX/k) == board.pieces[selected].moves[move].x && floor(mouseY/k) == board.pieces[selected].moves[move].y){
-        // let test = board;
-        // console.log(test)
-        // if (Scanboard(test, selected, move) == true){
-          board.pieces[selected] = makeMove(selected, move, board.pieces[selected],board);
-          board.logic(selected);
-          selected = -1;
-          turn *= -1;
-        // }else{
-        //   selected = -1;
-        // }
-
-      }
-      move++;
-    }
-    for (i = 0; i < board.pieces.length; i++){
-      if (floor(mouseX/k) == board.pieces[i].x && floor(mouseY/k) == board.pieces[i].y && board.pieces[i].player == turn && board.pieces[i].dead == false){
-        selected = i;
-      }
-    }
-  }
 }

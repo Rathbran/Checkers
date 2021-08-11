@@ -1,4 +1,3 @@
-
 var express = require('express');
 
 var app = express();
@@ -23,10 +22,19 @@ function newConnection(socket){
   socket.on('state', transmit);
   socket.on('mouse', mouseMsg);
   socket.on('turn',turnchange);
+    socket.on('endTurnChess', chessTurn);
+    socket.on('startNewGame', startChess);
   socket.on('game', function(data){
     socket.join(data);
   });
 
+    function startChess(data) {
+        console.log('starting game');
+      io.in('Chess').emit('newGame', data);
+  }
+  function chessTurn(data){
+    socket.to('Chess').emit('Chessturn', data);
+  }
   function mouseMsg(data){
     socket.to('Checkers').emit('mouse', data);
   }

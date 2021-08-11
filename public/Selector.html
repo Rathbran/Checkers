@@ -5,6 +5,7 @@
       function Select(Game){
         Game = './Games/' + Game + ".html";
         parent.document.getElementById('game').src = Game;
+        parent.document.getElementById("game").focus();
       }
     </script>
   </head>
@@ -17,7 +18,8 @@
     <button onclick = "Select('Snake')">Snake</button>
     <br>
     <button onclick = "Select('Chess')">Chess</button>
-
+    <br>
+    <button onclick = "Select('Tetris')">Tetris</button>
 
   </body>
 </html>
